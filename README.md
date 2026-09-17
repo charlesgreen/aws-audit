@@ -75,7 +75,7 @@ aws-audit-summarize ./aws-audit-123456789012-20260101-120000 > /tmp/summary.md
 
 Each run writes a directory of live account metadata. Treat it as confidential: it can include account IDs, IAM users and credential-report rows, Route 53 records, account contact emails, security-group rules, secret and parameter names, and public IPs. Do not commit it, paste it into tickets, or share it outside the people who own the audited account.
 
-This repo gitignores `aws-audit-*/` (the default output path). If you pass `--out`, keep that directory outside the working tree.
+This repo gitignores `/aws-audit-*/` at the repo root (the default output path). If you pass `--out`, keep that directory outside the working tree.
 
 VPN pre-shared keys, Auto Scaling `UserData`, CloudFront origin header values, and customer-gateway configuration XML are replaced with `[REDACTED]` before write. The collector does not call `GetSecretValue`, `ssm:GetParameter`, or `s3:GetObject`.
 

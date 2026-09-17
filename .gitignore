@@ -1,11 +1,14 @@
 # Audit dumps contain live account data (IAM, DNS, contacts, secret names,
 # security-group rules, etc.). Never commit them.
-aws-audit-*/
+# Leading slash is required: an unanchored aws-audit-*/ also matches
+# cmd/aws-audit-summarize and hides it from git and GoReleaser.
+/aws-audit-*/
 /summary.md
 /errors.log
 .env
 .env.*
 /bin/
+/dist/
 /aws-audit
 /aws-audit-summarize
 

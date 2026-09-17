@@ -1,7 +1,10 @@
 name: check
 
+# Branch-only: unfiltered push also runs on v* tags and duplicates Release.
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 jobs:
