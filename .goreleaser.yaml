@@ -1,0 +1,123 @@
+# GoReleaser configuration for aws-audit
+# Tested with GoReleaser v2
+# See https://goreleaser.com
+
+version: 2
+
+project_name: aws-audit
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod verify
+
+builds:
+  - id: aws-audit
+    main: ./cmd/aws-audit
+    binary: aws-audit
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.ShortCommit}}
+      - -X main.Date={{.Date}}
+  - id: aws-audit-summarize
+    main: ./cmd/aws-audit-summarize
+    binary: aws-audit-summarize
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.ShortCommit}}
+      - -X main.Date={{.Date}}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Security
+      regexp: '^.*?(security(\([[:word:]]+\))?|fix\(security\))!?:.+$'
+      order: 0
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: charlesgreen
+    name: aws-audit
+  draft: false
+  prerelease: auto
+  mode: append
+  name_template: "v{{.Version}}"
+  header: |
+    ## aws-audit {{.Version}}
+
+    Read-only AWS configuration audit CLI.
+  footer: |
+    ## Installation
+
+    Download the archive for your platform from the assets above.
+
+    ```bash
+    # Linux amd64
+    curl -L https://github.com/charlesgreen/aws-audit/releases/download/{{.Tag}}/aws-audit_{{.Version}}_Linux_x86_64.tar.gz | tar xz
+    sudo mv aws-audit aws-audit-summarize /usr/local/bin/
+    ```
+
+    Or from source:
+
+    ```bash
+    go install github.com/charlesgreen/aws-audit/cmd/aws-audit@{{.Tag}}
+    go install github.com/charlesgreen/aws-audit/cmd/aws-audit-summarize@{{.Tag}}
+    ```
+
+    ---
+    **Full Changelog**: https://github.com/charlesgreen/aws-audit/compare/{{.PreviousTag}}...{{.Tag}}
+
+sboms:
+  - artifacts: archive

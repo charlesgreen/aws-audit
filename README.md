@@ -2,6 +2,24 @@
 
 Read-only AWS metadata extraction and security/engineering audit. Implemented in Go with AWS SDK v2. The `.sh` files are thin wrappers around the binaries.
 
+## Install
+
+GitHub Releases (Linux amd64; replace the version):
+
+```bash
+curl -L https://github.com/charlesgreen/aws-audit/releases/download/v0.1.0/aws-audit_0.1.0_Linux_x86_64.tar.gz | tar xz
+sudo mv aws-audit aws-audit-summarize /usr/local/bin/
+```
+
+Or from source:
+
+```bash
+go install github.com/charlesgreen/aws-audit/cmd/aws-audit@latest
+go install github.com/charlesgreen/aws-audit/cmd/aws-audit-summarize@latest
+```
+
+A `v*` tag on `main` runs [GoReleaser](https://goreleaser.com) and publishes archives, checksums, and SBOMs.
+
 ## Prerequisites
 
 - Go 1.24+

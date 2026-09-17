@@ -11,6 +11,13 @@ import (
 	"github.com/charlesgreen/aws-audit/internal/regions"
 )
 
+// Set by GoReleaser ldflags.
+var (
+	Version = "dev"
+	Commit  = "none"
+	Date    = "unknown"
+)
+
 func main() {
 	os.Exit(run(os.Args[1:]))
 }
@@ -30,6 +37,9 @@ func run(args []string) int {
 		switch a {
 		case "-h", "--help":
 			fmt.Print(usage())
+			return 0
+		case "--version":
+			fmt.Printf("aws-audit %s (commit %s, date %s)\n", Version, Commit, Date)
 			return 0
 		case "--list-regions":
 			listOnly = true
@@ -101,6 +111,7 @@ func usage() string {
 	return `Usage:
   aws-audit [--profile NAME] [--regions r1,r2,...] [--out DIR] [--parallel N]
   aws-audit --list-regions
+  aws-audit --version
   aws-audit -h|--help
 
   --profile NAME       AWS CLI profile (default: audit)
@@ -109,6 +120,7 @@ func usage() string {
   --out DIR            Output directory (default: ./aws-audit-<account>-<timestamp>)
   --parallel N         Concurrent regional audits (default: 4)
   --list-regions       Print valid Region codes and exit (no AWS calls)
+  --version            Print version and exit
   -h, --help           Show this help and the valid Region list
 
 Default scan: every enabled Region in the account partition (worldwide, not us-* only).
