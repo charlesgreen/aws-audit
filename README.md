@@ -157,3 +157,7 @@ Each run writes to a new timestamped directory; nothing is overwritten. To diff 
 - WAFv2 CLOUDFRONT-scope queries run from the partition home Region (`us-east-1` commercially); the script handles that automatically.
 - `s3control get-public-access-block` requires `s3:GetAccountPublicAccessBlock`.
 - The summary parses the IAM credential report CSV; if generation hasn't completed within ~10 seconds the credential-report findings will be skipped.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
