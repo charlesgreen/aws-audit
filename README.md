@@ -1,17 +1,19 @@
 # AWS Configuration Audit
 
-Read-only AWS metadata extraction and security/engineering audit. Implemented in Go with AWS SDK v2. The `.sh` files are thin wrappers around the binaries.
+Read-only CLI that snapshots AWS account configuration and writes a findings report. Use it for monthly security reviews and as evidence toward ISO 27001 and SOC 2 technical controls.
+
+Implemented in Go with AWS SDK v2. Sibling tool: [gcp-audit](https://github.com/charlesgreen/gcp-audit).
 
 ## Install
 
-GitHub Releases (Linux amd64; replace the version):
+From a [GitHub Release](https://github.com/charlesgreen/aws-audit/releases) (Linux amd64; replace the version):
 
 ```bash
 curl -L https://github.com/charlesgreen/aws-audit/releases/download/v0.1.0/aws-audit_0.1.0_Linux_x86_64.tar.gz | tar xz
 sudo mv aws-audit aws-audit-summarize /usr/local/bin/
 ```
 
-Or from source:
+From source:
 
 ```bash
 go install github.com/charlesgreen/aws-audit/cmd/aws-audit@latest
@@ -22,60 +24,69 @@ A `v*` tag on `main` runs [GoReleaser](https://goreleaser.com) and publishes arc
 
 ## Prerequisites
 
-- Go 1.24+
-- A configured AWS profile with read-only permissions across the target account. Default profile name: `audit`.
+- Go 1.24+ (from source)
+- An AWS profile with read-only access to the target account. Default profile name: `audit`.
 
 ```bash
 aws sts get-caller-identity --profile audit
 ```
 
-## Files
+The AWS CLI is only needed to confirm the profile. The collector talks to AWS through the SDK.
 
-- `cmd/aws-audit` — extracts metadata across global + regional services and writes JSON to a timestamped output directory.
-- `cmd/aws-audit-summarize` — reads a dump directory and emits a markdown summary. Runs at the end of a collection, or standalone.
-- `aws-audit.sh` / `aws-audit-summarize.sh` — wrappers (`bin/` if built, otherwise `go run`).
+## Quick start
+
+```bash
+go run ./cmd/aws-audit --list-regions
+go run ./cmd/aws-audit --profile audit
+```
+
+After `make build`, the same flags work on `./bin/aws-audit`. After `go install` or a release archive, use `aws-audit` on your `PATH`.
 
 ## Usage
 
-Default (audits every enabled Region in the account partition — US, Europe, Asia Pacific, Canada, South America, plus any opted-in Regions such as Cape Town, Bahrain, or Mexico — parallelism 4):
+Default run: every enabled Region in the account partition (worldwide, not `us-*` only), parallelism 4.
 
 ```bash
-./aws-audit.sh
+aws-audit --profile audit
 ```
 
 Common overrides:
 
 ```bash
-./aws-audit.sh --profile audit --regions eu-west-1,ap-northeast-1,sa-east-1
-./aws-audit.sh --out /tmp/audit-2026-01-01 --parallel 8
+aws-audit --profile audit --regions eu-west-1,ap-northeast-1,sa-east-1
+aws-audit --out /tmp/audit-2026-01-01 --parallel 8
 ```
 
-Print every valid Region code (no AWS credentials required):
+Print every valid Region code (no AWS credentials):
 
 ```bash
-./aws-audit.sh --list-regions
+aws-audit --list-regions
 ```
 
-Re-run summary against an existing dump:
+Re-run the summary against an existing dump:
 
 ```bash
-./aws-audit-summarize.sh ./aws-audit-123456789012-20260101-120000 > /tmp/summary.md
+aws-audit-summarize ./aws-audit-123456789012-20260101-120000 > /tmp/summary.md
 ```
 
-## Handling audit output
+`aws-audit --help` lists flags and the Region catalog.
+
+## Audit output
 
 Each run writes a directory of live account metadata. Treat it as confidential: it can include account IDs, IAM users and credential-report rows, Route 53 records, account contact emails, security-group rules, secret and parameter names, and public IPs. Do not commit it, paste it into tickets, or share it outside the people who own the audited account.
 
-This repo gitignores `aws-audit-*/`, `summary.md`, and `errors.log`. If you pass `--out`, keep that directory outside the working tree.
+This repo gitignores `aws-audit-*/` (the default output path). If you pass `--out`, keep that directory outside the working tree.
+
+VPN pre-shared keys, Auto Scaling `UserData`, CloudFront origin header values, and customer-gateway configuration XML are replaced with `[REDACTED]` before write. The collector does not call `GetSecretValue`, `ssm:GetParameter`, or `s3:GetObject`.
 
 ## Regions
 
-By default the script audits **every Region the account can use**, not only `us-*`.
+By default the collector audits **every Region the account can use**, not only `us-*`.
 
 Region discovery follows [AWS Account Management](https://docs.aws.amazon.com/accounts/latest/reference/manage-acct-regions.html) and the [AWS Regions table](https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions.html):
 
-1. `aws account list-regions` — official list of every Region plus opt-in status. Scans `ENABLED_BY_DEFAULT` and `ENABLED`.
-2. If that API is denied, `aws ec2 describe-regions --all-regions` filtered to `opt-in-not-required` and `opted-in`.
+1. `account:ListRegions` — official list of every Region plus opt-in status. Scans `ENABLED_BY_DEFAULT` and `ENABLED`.
+2. If that API is denied, `ec2:DescribeRegions` with `--all-regions` filtered to `opt-in-not-required` and `opted-in`.
 3. If both fail, the 17 default (always-on) commercial Regions from the docs — Asia Pacific, Canada, Europe, South America, and US — not `us-east-1` alone.
 
 Opt-in Regions that are still `DISABLED` are skipped (IAM is not replicated there until you enable them) and listed in `meta.json` as `regions_not_enabled`.
@@ -90,7 +101,7 @@ GovCloud (`us-gov-east-1` AWS GovCloud (US-East), `us-gov-west-1` AWS GovCloud (
 
 ## Output layout
 
-```bash
+```text
 aws-audit-<account>-<UTC-timestamp>/
   meta.json                       # account id, principal, start time
   errors.log                      # every failed API call (esp. AccessDenied)
@@ -99,82 +110,64 @@ aws-audit-<account>-<UTC-timestamp>/
     iam/                          # users, roles, policies, credential report, per-user details
     organizations/                # org structure, SCPs
     account/                      # contacts, regions
-    s3/                           # account public access block + per-bucket config (encryption, PAB, policy, versioning, logging, ...)
+    s3/                           # account public access block + per-bucket config
     route53/                      # zones, records, query logging
     cloudfront/                   # distributions, OACs, functions
     waf/                          # CLOUDFRONT-scope WAFv2 ACLs/IP sets
     support/                      # Trusted Advisor (requires Business/Enterprise support)
   regions/
     <region>/
-      ec2/                        # instances, AMIs, volumes, snapshots, key pairs, EIPs, ENIs, launch templates, security groups, default-EBS-encryption
-      vpc/                        # VPCs, subnets, route tables, IGWs, NAT, peering, endpoints, NACLs, flow logs, TGWs, VPNs
-      elb/                        # classic + v2 LBs, target groups
-      autoscaling/                # ASGs, launch configs
-      lambda/                     # functions, layers, event source mappings
-      ecs/ eks/ ecr/              # container infra
-      rds/                        # instances, clusters, snapshots, parameter/subnet groups
-      dynamodb/ elasticache/ redshift/ opensearch/
+      ec2/ vpc/ elb/ autoscaling/
+      lambda/ ecs/ eks/ ecr/
+      rds/ dynamodb/ elasticache/ redshift/ opensearch/
       efs/ fsx/ backup/
-      kms/ secretsmanager/ ssm/   # keys + per-key rotation/policy, secrets, parameters, patch baselines
-      security/                   # CloudTrail, AWS Config, GuardDuty, Security Hub, Inspector, Macie, Access Analyzer, Detective
-      logs/                       # CloudWatch log groups, metric filters
-      sns/ sqs/ events/
-      apigw/                      # REST + v2 APIs, domain names
-      acm/                        # certificates (with per-cert detail and NotAfter)
-      waf/                        # REGIONAL-scope WAFv2
-      tags/                       # tagged resource inventory
+      kms/ secretsmanager/ ssm/
+      security/                   # CloudTrail, Config, GuardDuty, Security Hub, Inspector, Macie, Access Analyzer, Detective
+      logs/ sns/ sqs/ events/ apigw/ acm/ waf/ tags/
 ```
 
 ## What the summary checks
 
-The markdown summary calls out:
-
 - **IAM:** root MFA, root access keys, users without MFA, access keys >90d, weak password policy, inline user policies.
-- **Account services:** missing/weak CloudTrail (multi-region, log file validation, KMS, actively logging); GuardDuty / AWS Config / Security Hub / Access Analyzer disabled per
-  region.
+- **Account services:** missing/weak CloudTrail (multi-region, log file validation, KMS, actively logging); GuardDuty / AWS Config / Security Hub / Access Analyzer disabled per region.
 - **Network:** security groups with `0.0.0.0/0` ingress; default VPCs in use; VPCs without flow logs.
 - **S3:** account-level public access block; per-bucket public status, public access block, encryption, versioning, logging, static website.
-- **Compute/data encryption:** EBS encryption-by-default off; unencrypted EBS volumes; publicly accessible RDS; unencrypted RDS; RDS 0-day backup retention; EC2 not enforcing
-  IMDSv2; public-IP EC2 instances.
-- **KMS:** CMKs without rotation.
+- **Compute/data encryption:** EBS encryption-by-default off; unencrypted EBS volumes; publicly accessible RDS; unencrypted RDS; RDS 0-day backup retention; EC2 not enforcing IMDSv2; public-IP EC2 instances.
+- **KMS:** customer-managed keys without rotation.
 - **ACM:** certs expiring in <30 days.
 - **Logging:** CloudWatch log groups with no retention.
 - **Cost/governance:** unattached EBS volumes; unassociated Elastic IPs; untagged resources.
 
-## Build and test
-
-```bash
-make check    # gofmt, go vet, go test (no AWS credentials)
-make build    # bin/aws-audit and bin/aws-audit-summarize
-```
-
-CI runs the same gate on every push. Tests use a fake AWS client; they never call live APIs.
-
-VPN pre-shared keys, Auto Scaling `UserData`, CloudFront origin header values, and customer-gateway configuration XML are replaced with `[REDACTED]` before write.
-
 ## Permissions
 
-The collector is read-only — it issues only `Describe*`, `List*`, `Get*` calls (plus `sts:GetCallerIdentity` and `iam:GenerateCredentialReport`, which only generates the in-account
-report, no mutation). It does not call `GetSecretValue`, `ssm:GetParameter`, or `s3:GetObject`.
+The collector is read-only: `Describe*`, `List*`, `Get*` plus `sts:GetCallerIdentity` and `iam:GenerateCredentialReport` (generates the in-account report only; no other mutation).
 
-Any API the profile cannot access lands in `errors.log` and the corresponding output file becomes `{}`. The summary section "Permission / API Errors" surfaces the count so you know
-where blind spots may exist.
+Any API the profile cannot access lands in `errors.log` and the corresponding output file becomes `{}`. The summary section "Permission / API Errors" surfaces the count so you know where blind spots may exist.
 
 ## Performance
 
 Regions run in parallel (default 4 concurrent). A full audit of a typical multi-region account takes 5–15 minutes. Tune with `--parallel`.
 
-## Reproducibility
+Each run writes to a new timestamped directory; nothing is overwritten. Diff two output trees to compare months.
 
-Each run writes to a new timestamped directory; nothing is overwritten. To diff two runs, point a normal diff tool at the two output trees.
+## Build and test
+
+```bash
+make check    # gofmt, go vet, go test (no AWS credentials)
+make build    # ./bin/aws-audit and ./bin/aws-audit-summarize
+```
+
+CI runs the same gate on every push. Tests use a fake AWS client; they never call live APIs.
+
+Optional repo-root wrappers (`aws-audit.sh`, `aws-audit-summarize.sh`) exec `./bin/*` if present, otherwise `go run ./cmd/...`. Releases and `PATH` installs use the Go binaries, not the wrappers.
 
 ## Caveats
 
-- `support describe-trusted-advisor-checks` requires AWS Business or Enterprise Support — expect a permission failure on basic-tier accounts.
-- `account get-alternate-contact` requires the management account or appropriate delegation.
-- WAFv2 CLOUDFRONT-scope queries run from the partition home Region (`us-east-1` commercially); the script handles that automatically.
-- `s3control get-public-access-block` requires `s3:GetAccountPublicAccessBlock`.
-- The summary parses the IAM credential report CSV; if generation hasn't completed within ~10 seconds the credential-report findings will be skipped.
+- `support:DescribeTrustedAdvisorChecks` requires AWS Business or Enterprise Support — expect a permission failure on basic-tier accounts.
+- `account:GetAlternateContact` requires the management account or appropriate delegation.
+- WAFv2 CLOUDFRONT-scope queries run from the partition home Region (`us-east-1` commercially); the collector handles that automatically.
+- Account-level S3 public access block requires `s3:GetAccountPublicAccessBlock`.
+- If `iam:GetCredentialReport` fails, credential-report findings are skipped.
 
 ## License
 

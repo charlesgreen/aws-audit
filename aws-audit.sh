@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Thin wrapper around the Go collector (cmd/aws-audit).
+# Optional local helper: exec ./bin/aws-audit or go run ./cmd/aws-audit.
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 if [[ -x "${DIR}/bin/aws-audit" ]]; then
