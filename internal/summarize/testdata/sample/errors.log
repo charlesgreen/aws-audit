@@ -1,0 +1,2 @@
+[2026-01-01T00:00:00Z] FAIL rc=254 :: aws iam get-account-authorization-details
+    AccessDenied

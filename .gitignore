@@ -1,0 +1,11 @@
+# Audit dumps contain live account data (IAM, DNS, contacts, secret names,
+# security-group rules, etc.). Never commit them.
+aws-audit-*/
+/summary.md
+/errors.log
+.env
+.env.*
+/bin/
+/aws-audit
+/aws-audit-summarize
+

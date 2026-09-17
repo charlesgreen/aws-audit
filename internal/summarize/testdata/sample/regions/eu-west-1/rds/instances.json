@@ -1,0 +1,10 @@
+{
+  "DBInstances": [
+    {
+      "DBInstanceIdentifier": "public-db",
+      "PubliclyAccessible": true,
+      "StorageEncrypted": true,
+      "BackupRetentionPeriod": 7
+    }
+  ]
+}

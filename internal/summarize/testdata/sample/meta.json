@@ -1,0 +1,8 @@
+{
+  "account_id": "123456789012",
+  "principal_arn": "arn:aws:iam::123456789012:role/audit",
+  "partition": "aws",
+  "home_region": "us-east-1",
+  "regions_scanned": ["eu-west-1"],
+  "regions_not_enabled": ["af-south-1"]
+}
